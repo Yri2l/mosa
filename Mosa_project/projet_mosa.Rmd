@@ -1,0 +1,401 @@
+---
+title: "projet"
+output: html_document
+date: "2024-11-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+# Chargement des bibliothèques nécessaires
+install.packages("summarytools")
+install.packages("gridExtra")
+library(gridExtra)
+
+library(dplyr)       # Manipulation de données
+library(ggplot2)     # Visualisation des données
+library(summarytools) # Statistiques descriptives
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+train1 <- read.csv("train1.csv")
+train1$Farm <- as.factor(train1$Farm)
+head(train1)
+test1 <- read.csv("test1.csv")
+test1$Farm <- as.factor(test1$Farm)
+head(test1)
+
+
+```
+
+```{r pressure, echo=FALSE}
+
+
+# Affichage des statistiques descriptives détaillées pour les variables numériques
+train1$Species <- as.factor(train1$Species)
+train1$Gender <- as.factor(train1$Gender)
+train1$Farm <- as.factor(train1$Farm)
+train1$NumberID <- as.factor(train1$NumberID)
+
+test1$Species <- as.factor(test1$Species)
+test1$Gender <- as.factor(test1$Gender)
+test1$Farm <- as.factor(test1$Farm)
+test1$NumberID <- as.factor(test1$NumberID)
+
+```
+
+```{r pressure, echo=FALSE}
+library(mice)
+library(readr)
+
+# Charger les données
+
+# Appliquer MIC
+imputed_train <- mice(train1, m = 5, method = 'pmm', maxit = 10, seed = 42)
+imputed_test <- mice(test1, m = 5, method = 'pmm', maxit = 10, seed = 42)
+# Résultat final
+completed_train <- complete(imputed_train, "long")
+completed_test <- complete(imputed_test, "long")
+
+
+
+# Vérification des valeurs manquantes après l'imputation
+colSums(is.na(completed_test))
+colSums(is.na(completed_train))
+
+write_csv(completed_train, "train_MIC.csv")
+write_csv(completed_test, "test_MIC.csv")
+
+
+
+
+
+```
+```{r pressure, echo=FALSE}
+data  <- rbind(completed_train, completed_test)
+
+summary(data)
+
+```
+
+
+
+
+
+
+
+```{r pressure, echo=FALSE}
+# 7. Étude par ferme
+ggplot(data, aes(x = Farm)) + 
+  geom_bar(fill = "orange") + 
+  theme_minimal() + 
+  labs(title = "Nombre de cochons par ferme", x = "Ferme", y = "Nombre")
+```
+
+
+
+
+```{r pressure, echo=FALSE}
+library(dplyr)
+library(ggplot2)
+
+# Assurez-vous que la variable Day est au format Date
+data$Day <- as.Date(data$Day)
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r pressure, echo=FALSE}
+# Visualisation 1 : Distribution du poids par âge et genre
+ggplot(data, aes(x = Age, y = Weight, color = Gender)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(title = "Relation entre l'âge et le poids par genre",
+       x = "Âge (jours)",
+       y = "Poids (kg)")
+
+# Visualisation 2 : Évolution du poids et des mesures par cochon
+p1 <- ggplot(data, aes(x = Day, y = Weight, group = NumberID, color = NumberID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Évolution du poids par cochon",
+       x = "Jour",
+       y = "Poids (kg)")
+
+p2 <- ggplot(data, aes(x = Day, y = Chest, group = NumberID, color = NumberID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Évolution du tour de poitrine par cochon",
+       x = "Jour",
+       y = "Tour de poitrine (cm)")
+
+p3 <- ggplot(data, aes(x = Day, y = Length, group = NumberID, color = NumberID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Évolution de la longueur par cochon",
+       x = "Jour",
+       y = "Longueur (cm)")
+
+# Visualisation 2.1 : Évolution pour chaque espèce
+species_plots <- lapply(unique(data$Species), function(species) {
+  species_data <- filter(data, Species == species)
+  plot_weight <- ggplot(species_data, aes(x = Day, y = Weight, group = NumberID, color = NumberID)) +
+    geom_line() +
+    theme_minimal() +
+    labs(title = paste("Évolution du poids pour l'espèce", species),
+         x = "Jour",
+         y = "Poids (kg)")
+
+  plot_chest <- ggplot(species_data, aes(x = Day, y = Chest, group = NumberID, color = NumberID)) +
+    geom_line() +
+    theme_minimal() +
+    labs(title = paste("Évolution du tour de poitrine pour l'espèce", species),
+         x = "Jour",
+         y = "Tour de poitrine (cm)")
+
+  plot_length <- ggplot(species_data, aes(x = Day, y = Length, group = NumberID, color = NumberID)) +
+    geom_line() +
+    theme_minimal() +
+    labs(title = paste("Évolution de la longueur pour l'espèce", species),
+         x = "Jour",
+         y = "Longueur (cm)")
+
+  list(plot_weight, plot_chest, plot_length)
+})
+
+# Afficher les graphiques ensemble pour chaque espèce
+for (species_plots_list in species_plots) {
+  grid.arrange(grobs = species_plots_list, ncol = 1)
+}
+
+# Visualisation 3 : Histogramme du poids par ferme
+ggplot(data, aes(x = Weight, fill = Farm)) +
+  geom_histogram(binwidth = 5, alpha = 0.7, position = "dodge") +
+  theme_minimal() +
+  labs(title = "Distribution du poids par ferme",
+       x = "Poids (kg)",
+       y = "Nombre de cochons")
+
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+
+# Visualisation 4 : Boxplot de l'âge par espèce
+ggplot(data, aes(x = Species, y = Age, fill = Species)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution de l'âge par espèce",
+       x = "Espèce",
+       y = "Âge (jours)")
+
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+
+# Garder uniquement les colonnes nécessaires
+data_subset <- data[, c("Weight", "Length", "Chest")]
+
+
+# Calculer la matrice de corrélation
+cor_matrix <- cor(data_subset, use = "complete.obs")
+# Visualiser la matrice de corrélation avec un heatmap
+library(reshape2)
+cor_melt <- melt(cor_matrix)
+ggplot(cor_melt, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1)) +
+  theme_minimal() +
+  labs(title = "Matrice de corrélation entre les mesures physiques",
+       x = "Variables",
+       y = "Variables",
+       fill = "Corrélation")
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+# Visualisation 2.2 : Évolution pour chaque espèce et genre
+species_gender_plots <- lapply(unique(data$Species), function(species) {
+  lapply(unique(data$Gender), function(gender) {
+    species_gender_data <- filter(data, Species == species, Gender == gender)
+
+    if (nrow(species_gender_data) > 0) {
+      plot_weight <- ggplot(species_gender_data, aes(x = Day, y = Weight, group = NumberID, color = NumberID)) +
+        geom_line() +
+        theme_minimal() +
+        labs(title = paste("Évolution du poids pour l'espèce", species, "et le genre", gender),
+             x = "Jour",
+             y = "Poids (kg)")
+
+      plot_chest <- ggplot(species_gender_data, aes(x = Day, y = Chest, group = NumberID, color = NumberID)) +
+        geom_line() +
+        theme_minimal() +
+        labs(title = paste("Évolution du tour de poitrine pour l'espèce", species, "et le genre", gender),
+             x = "Jour",
+             y = "Tour de poitrine (cm)")
+
+      plot_length <- ggplot(species_gender_data, aes(x = Day, y = Length, group = NumberID, color = NumberID)) +
+        geom_line() +
+        theme_minimal() +
+        labs(title = paste("Évolution de la longueur pour l'espèce", species, "et le genre", gender),
+             x = "Jour",
+             y = "Longueur (cm)")
+
+      list(plot_weight, plot_chest, plot_length)
+    } else {
+      NULL
+    }
+  })
+})
+
+# Afficher les graphiques pour chaque espèce et genre
+for (i in seq_along(species_gender_plots)) {
+  for (j in seq_along(species_gender_plots[[i]])) {
+    if (!is.null(species_gender_plots[[i]][[j]])) {
+      grid.arrange(grobs = species_gender_plots[[i]][[j]], ncol = 1)
+    }
+  }
+}
+
+
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+# Calculer le nombre de cochons distincts par Species et Gender
+result <- data %>%
+  distinct(NumberID, Species, Gender) %>%  # Garder les combinaisons uniques de NumberID, Species et Gender
+  group_by(Species, Gender) %>%            # Regrouper par Species et Gender
+  summarise(Count = n(), .groups = "drop") # Compter les cochons distincts dans chaque groupe
+
+# Créer un histogramme
+ggplot(result, aes(x = as.factor(Species), y = Count, fill = as.factor(Gender))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Nombre de cochons par espèce et par genre",
+       x = "Espèce",
+       y = "Nombre de cochons",
+       fill = "Genre") +
+  theme_minimal()
+
+
+```
+
+```{r pressure, echo=FALSE}
+
+# Calculer le nombre de cochons distincts par Farm et Species
+result <- data %>%
+  distinct(NumberID, Farm, Species) %>%  # Garder les combinaisons uniques de NumberID, Farm et Species
+  group_by(Farm, Species) %>%            # Regrouper par Farm et Species
+  summarise(Count = n(), .groups = "drop") # Compter les cochons distincts dans chaque groupe
+
+# Créer un histogramme
+ggplot(result, aes(x = as.factor(Farm), y = Count, fill = as.factor(Species))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Nombre de cochons par espèce et par ferme",
+       x = "Ferme",
+       y = "Nombre de cochons",
+       fill = "Espèce") +
+  theme_minimal()
+
+```
+
+
+```{r pressure, echo=FALSE}
+# Charger les bibliothèques nécessaires
+library(dplyr)
+
+# Fonction pour détecter les outliers selon la méthode IQR
+detect_outliers <- function(x) {
+  Q1 <- quantile(x, 0.25, na.rm = TRUE) # Premier quartile
+  Q3 <- quantile(x, 0.75, na.rm = TRUE) # Troisième quartile
+  IQR_value <- Q3 - Q1                  # IQR
+  lower_bound <- Q1 - 1.5 * IQR_value   # Limite inférieure
+  upper_bound <- Q3 + 1.5 * IQR_value   # Limite supérieure
+  return(x < lower_bound | x > upper_bound) # Détecter les outliers
+}
+
+# Appliquer la détection d'outliers par groupe (par Species et Farm ici)
+data_outliers <- data %>%
+  group_by(Species, Farm) %>%                         # Regrouper par Species et Farm
+  mutate(across(where(is.numeric),                   # Appliquer aux colonnes numériques
+                ~ detect_outliers(.),                # Appliquer la fonction d'outliers
+                .names = "outlier_{.col}")) %>%      # Créer des colonnes d'indicateurs d'outliers
+  ungroup()                                          # Supprimer le regroupement
+
+# Voir les données avec les indicateurs d'outliers
+print(data_outliers)
+
+```
+
+
+
+```{r pressure, echo=FALSE}
+# Préparer les données pour les boxplots par groupe
+data_long <- data %>%
+  select(Farm, Species, where(is.numeric)) %>% # Garder les colonnes pertinentes
+  pivot_longer(cols = -c(Farm, Species), names_to = "Variable", values_to = "Value")
+
+# Créer les boxplots, groupés par Species et colorés par Farm
+ggplot(data_long, aes(x = as.factor(Species), y = Value, fill = as.factor(Farm))) +
+  geom_boxplot(outlier.color = "red", outlier.shape = 16, outlier.size = 2) +
+  facet_wrap(~Variable, scales = "free_y") + # Une facette pour chaque variable numérique
+  labs(title = "Boxplots des variables numériques par espèce et ferme",
+       x = "Espèce",
+       y = "Valeurs",
+       fill = "Ferme") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Incliner les étiquettes sur l'axe X
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+
+
+# Préparer les données pour les boxplots par âge
+data_long <- data %>%
+  select(Age, where(is.numeric)) %>% # Garder les colonnes pertinentes (Age et les variables numériques)
+  pivot_longer(cols = -Age, names_to = "Variable", values_to = "Value")
+
+# Créer les boxplots, groupés par Age
+ggplot(data_long, aes(x = as.factor(Age), y = Value)) +
+  geom_boxplot(outlier.color = "red", outlier.shape = 16, outlier.size = 2) +
+  facet_wrap(~Variable, scales = "free_y") + # Une facette pour chaque variable numérique
+  labs(title = "Boxplots des variables numériques par âge",
+       x = "Âge",
+       y = "Valeurs") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Incliner les étiquettes sur l'axe X
+
+```

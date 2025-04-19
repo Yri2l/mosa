@@ -1,0 +1,898 @@
+---
+title: "projet"
+output: html_document
+date: "2024-11-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+trainset = read.table('train_MIC.csv', sep=',', header=TRUE)
+trainset<- trainset[, -2] #sans la date
+```
+
+
+
+```{r pressure, echo=FALSE}
+head(trainset)
+
+```
+
+
+
+
+
+
+```{r pressure, echo=FALSE}
+library(lattice)
+xyplot(Weight ~ Age, data=trainset)
+```
+
+
+
+
+
+
+```{r pressure, echo=FALSE}
+#q1
+
+library(sm)
+h=0.6
+out=sm.regression(trainset$Age, trainset$Weight, h, eval.points=min(trainset$Age):max(trainset$Age))
+names(out)
+```
+
+
+```{r pressure, echo=FALSE}
+standard_deviations <- sapply(min(trainset$Age):max(trainset$Age), function(age) sd(trainset$Weight[trainset$Age==age]))
+```
+
+
+
+
+
+```{r pressure, echo=FALSE}
+confidence.upper <- out$estimate + 1.96*standard_deviations
+confidence.lower <- out$estimate - 1.96*standard_deviations
+confidence.upper
+```
+
+
+
+
+
+```{r pressure, echo=FALSE}
+
+plot(Weight ~ Age, data=trainset)
+polygon(c(out$eval.points, rev(out$eval.points)), c(confidence.lower, rev(confidence.upper)),
+        col = "#7FE2EA")
+points(Weight ~ Age, data=trainset)
+lines(x=out$eval.points, y=out$estimate, col='red')
+lines(x=out$eval.points, y=confidence.upper, col='green')
+lines(x=out$eval.points, y=confidence.lower, col='green')
+
+
+
+```
+On voir ici 95 % variability band de la q1 
+L'évolution du poids en fonction de l'age semble presque linéraire avec une plus grande variabilité en 15 et 20ans, une faible pour un faible age ce qui est logique, de même à 25 ans la varaiblité réduit, il semble qu'à 25 ans tous les cochons est finit leur croissance, la variabilité avant est du à la croissance des cochons qui peut ne pas commencer  au même moment. 
+
+```{r pressure, echo=FALSE}
+
+out$data
+out$sigma
+out$se
+
+
+```
+
+
+
+
+```{r pressure, echo=FALSE}
+#Q3 other covariate 
+library(lattice)
+xyplot(Weight~Chest, data=na.omit(trainset))
+xyplot(Weight~Chest, data=na.omit(trainset))
+
+
+```
+On a déjà vu avant que ces variables sont importante. 
+
+```{r pressure, echo=FALSE}
+
+library(mgcv)
+?gam
+
+```
+
+
+
+```{r}
+#q4
+fit1<- gam(formula =Weight~s(Age) + Length + Chest , data=trainset)
+summary(fit1)
+
+# age est smooth comme demandé dans l'énoncé
+```
+```{r}
+plot(fit1, all.terms = TRUE)
+```
+```{r}
+pred <- predict(fit1, type = "link", se.fit = TRUE)  # "link" pour l'échelle du lien (logit, log, etc.)
+lower <- pred$fit - 1.96 * pred$se.fit
+upper <- pred$fit + 1.96 * pred$se.fit
+
+# Transformation si nécessaire pour obtenir les intervalles de confiance sur l'échelle de réponse
+# (par exemple, pour un modèle logit, utilisez exp() pour transformer)
+intervalles <- data.frame(prediction = pred$fit, lower = lower, upper = upper)
+print(intervalles)
+
+
+
+```
+
+
+```{r}
+#q5
+fit2 <- gam(Weight~s(Age)+s(Chest)+s(Length), data=trainset)
+summary(fit2)
+```
+```{r}
+plot(fit2, select=2)
+abline(coef = c(-fit2$coefficients[1], fit1$coefficients[3]), col='blue')
+```
+```{r}
+plot(fit2, select=3)
+abline(coef = c(-fit2$coefficients[1], fit1$coefficients[2]), col='blue')
+```
+
+
+```{r}
+fit2$edf
+
+```
+Si les termes de l'edf sont égale à 1 ça veut dire linéaire, si plus grand sa veut dire relation pas linéaire, c'est donc le cas surtout pour age (répond à la q5)
+
+
+```{r}
+#q6 alternative model
+fit3 <- gam(Weight~s(Age)+s(Chest)+s(Length), data=trainset, method="REML")
+plot(fit3)
+```
+
+```{r}
+fit3 <- gam(Weight~te(Age+Chest)+s(Length), data=trainset )
+plot(fit3)
+```
+
+
+```{r}
+fit3 <- gam(Weight~s(Age)+te(Chest+Length), data=trainset)
+summary(fit3)
+plot(fit3)
+```
+
+
+```{r}
+fit4 <- gam(Weight~s(Age)+s(Chest)+s(Length), family='quasipoisson',link='log', data=trainset)
+summary(fit4)
+plot(fit4)
+
+```
+
+```{r}
+fit4 <- gam(log(Weight)~s(Age)+s(Chest)+s(Length), data=trainset)
+summary(fit4)
+plot(fit4)
+```
+
+
+
+
+```{r}
+plot(fit4$residuals)
+
+```
+
+```{r}
+#q7 - q8
+library(lme4)
+lme1 <- lmer(Weight ~ Age + Length + Chest +(1|NumberID), data=trainset)
+summary(lme1)
+```
+
+réponse à la question q7 : les effets aléatoires représentent la variablité inter groupe 
+
+C'est raisonable de faire ça car on répéte les observations plusieurs fois sur les mêmes cochons. 
+
+
+
+```{r}
+plot(fit4$residuals)
+
+```
+```{r}
+library(lme4)
+```
+
+
+```{r}
+lme1 <- lmer(Weight ~ Age + Length + Chest +(1|NumberID), data=trainset)
+summary(lme1)
+```
+
+```{r}
+fixef(lme1)
+```
+```{r}
+ranef(lme1, drop=TRUE)
+```
+```{r}
+plot(lme1)
+```
+```{r}
+lme1 <- lmer(Weight ~ Age + Length + Chest +(1|Farm), data=trainset)
+plot(lme1)
+```
+```{r}
+lme1 <- lmer(Weight ~ Age + Length + Chest +(1|NumberID), data=trainset)
+summary(lme1)
+```
+```{r}
+plot(lme1)
+```
+```{r}
+#q9 en gros on essaye autre chose on voir les résultats
+lme1 <- lmer(Weight ~ Age + Length + Chest +(Age|NumberID), data=trainset)
+summary(lme1)
+```
+
+Le terme (Age | NumberID) indique que :
+Il y a un effet aléatoire pour la variable catégorique NumberID (par exemple, chaque individu ou groupe identifié par NumberID a ses propres caractéristiques spécifiques).
+Age (une variable continue ici) peut avoir un effet spécifique pour chaque NumberID. Autrement dit, la relation entre Age et la réponse dépend de chaque individu (NumberID).
+```{r}
+plot(lme1)
+```
+en gros la faut discuter des résultats du lme1, on pourra aussi essayer de faire des groupes sur species ou genre mais j'ai pas fait la 
+
+
+```{r}
+#q10
+library(nlme)
+lme1 <- lme(Weight ~ Age + Length + Chest,random=~Age|NumberID, data=trainset,na.action=na.omit)
+summary(lme1)
+```
+
+```{r}
+lme2 <- lme(Weight ~ Age + Length + Chest,random=~Age|NumberID, data=trainset, correlation=corAR1(form= ~ 1 | NumberID), na.action=na.omit, control = lmeControl(opt = "optim"))
+
+
+```
+
+
+```{r}
+summary(lme2)
+```
+```{r}
+plot(lme2)
+```
+
+
+```{r}
+filter_indicies <-trainset$NumberID >= 2 & trainset$NumberID <= 7
+trainset_filtered <- na.omit(trainset)[filter_indicies,]
+trainset_filtered$fitted_filtered <- fitted.values(lme2)[filter_indicies]
+```
+
+
+```{r}
+xyplot(fitted_filtered ~ Weight | NumberID, 
+       data = trainset_filtered,
+       layout = c(4, 4),  # Adjust the grid layout (rows x columns)
+       panel = function(x, y) {
+           panel.xyplot(x, y, pch = 16, col = "blue")  # Scatterplot
+           panel.abline(a = 0, b = 1, lty = 2, col = "gray")  # Reference line y = x
+       },
+       main = "Actual vs Fitted Values by NumberID",
+       xlab = "Actual Weight",
+       ylab = "Fitted Weight")
+```
+```{r}
+xyplot(Weight ~ Age | NumberID, 
+       data = trainset_filtered,
+       layout = c(4, 4),  # Adjust the grid layout (rows x columns)
+       panel = function(x, y) {
+           panel.xyplot(x, y, pch = 16, col = "blue")  # Scatterplot
+           panel.lines(x=trainset_filtered$Age, y= trainset_filtered$fitted_filtered, col='red')
+       },
+       main = "Actual vs Fitted Values by NumberID",
+       xlab = "Actual Weight",
+       ylab = "Fitted Weight")
+```
+```{r}
+lme3 <- lme(Weight ~ Age + Length + Chest,random=~Age+Farm|NumberID, data=trainset, correlation=corAR1(form= ~ 1 | NumberID), na.action=na.omit, control = lmeControl(opt = "optim"))
+```
+
+
+```{r}
+summary(lme3)
+```
+
+```{r}
+filter_indicies <-trainset$NumberID >= 2 & trainset$NumberID <= 7
+trainset_filtered <- na.omit(trainset)[filter_indicies,]
+trainset_filtered$fitted_filtered <- fitted.values(lme3)[filter_indicies]
+```
+
+```{r}
+xyplot(Weight ~ Age | NumberID, 
+       data = trainset_filtered,
+       layout = c(4, 4),  # Adjust the grid layout (rows x columns)
+       panel = function(x, y) {
+           panel.xyplot(x, y, pch = 16, col = "blue")  # Scatterplot
+           panel.points(x=x, y= trainset_filtered$fitted_filtered, col='red')
+       },
+       main = "Actual vs Fitted Values by NumberID",
+       xlab = "Actual Weight",
+       ylab = "Fitted Weight")
+```
+
+```{r}
+trainset_filtered
+```
+
+```{r}
+
+
+# Résidus standardisés
+plot(fitted(lme2), resid(lme2), main="Résidus vs valeurs ajustées")
+abline(h = 0, col = "red", lty = 2)
+
+# Histogramme des résidus
+hist(resid(lme2), main="Histogramme des résidus", xlab="Résidus", col="lightblue")
+
+# Q-Q plot des résidus
+qqnorm(resid(lme2))
+qqline(resid(lme2), col="red")
+
+
+```
+
+En gros on teste plusieurs truc on voit comment ça marche, j'ai pas fait le likelihood test mais faudra. 
+
+Ensuite on compare avec le premier model pour répondre à  Is there evidence that the additional correlation in the model improves your fit?
+
+
+Q11 pas fait encore 
+
+
+
+```{r}
+#q12
+library(mgcv)
+fit_gamm <- gamm(
+    Weight ~ s(Age) + s(Chest) + s(Length),  # Effets fixes additifs non-linéaires
+    random = list(NumberID = ~1),            # Effet aléatoire pour chaque NumberID
+    data = trainset                          # Jeu de données
+)
+?gamm
+
+
+```
+
+
+
+
+
+
+
+```{r}
+# Résumé des effets additifs
+summary(fit_gamm$gam)
+
+# Résumé des effets aléatoires
+summary(fit_gamm$lme)
+
+
+```
+
+
+```{r}
+plot(fit_gamm$gam, all.terms = TRUE)
+plot(fit_gamm$lme, all.terms = TRUE)
+#plot(fit_gamm$lme + fit_gamm$gam, all.terms = TRUE)
+
+
+
+fit_gamm$lme
+fit_gamm$gam
+
+```
+
+
+```{r}
+# Calculer l'AIC et le BIC pour le modèle additif (fit_gamm$gam)
+aic_gam <- AIC(fit_gamm$gam)
+bic_gam <- BIC(fit_gamm$gam)
+
+# Calculer l'AIC et le BIC pour le modèle à effets mixtes linéaires (fit_gamm$lme)
+aic_lme <- AIC(fit_gamm$lme)
+bic_lme <- BIC(fit_gamm$lme)
+
+# Afficher les résultats sous forme de tableau
+aic_bic_comparison <- data.frame(
+    Model = c("Additive (fit_gamm$gam)", "Linear Mixed (fit_gamm$lme)"),
+    AIC = c(aic_gam, aic_lme),
+    BIC = c(bic_gam, bic_lme)
+)
+print(aic_bic_comparison)
+
+```
+
+
+```{r}
+# Tracer les résidus de la partie `lme` (modèle linéaire mixte)
+par(mfrow = c(1, 2))  # Diviser l'écran en 2 graphiques
+
+# Résidus du modèle linéaire mixte
+plot(residuals(fit_gamm$lme), main = "Résidus: Modèle linéaire mixte (fit_gamm$lme)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+# Résidus du modèle additif
+plot(residuals(fit_gamm$gam), main = "Résidus: Modèle additif (fit_gamm$gam)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+
+```
+
+
+
+```{r}
+# Extraire les résidus de chaque modèle
+residuals_gamm <- residuals(fit_gamm$gam) + residuals(fit_gamm$lme)
+residuals_gam <- residuals(fit_gamm$gam)
+residuals_lme <- residuals(fit_gamm$lme)
+
+# Tracer les résidus pour les trois modèles
+
+# Résidus du modèle additif mixte
+plot(residuals_gamm, main = "Résidus: Modèle Additif Mixte (fit_gamm)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+# Résidus du modèle additif
+plot(residuals_gam, main = "Résidus: Modèle Additif (fit_gamm$gam)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+# Résidus du modèle linéaire mixte
+plot(residuals_lme, main = "Résidus: Modèle Linéaire Mixte (fit_gamm$lme)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+
+```
+Dans les trois cas les résidus sont centré sur 0 ce qui ai bien, il semble qu'il y ai moins de variance pour fit_gamm$lme, et une tendance plus aléatoire dans les résidus. Par exemple sur certaines zones de fit_gamm$gam bcp de résidus sont au dessus ou en dessous de 0. Ainsi pour fit_gamm global, on retrouve la moyenne des deux. A ce niveau fit_gamm$lme semble compensé les erreurs de fit_gamm$gam. 
+
+
+
+
+
+
+
+nouveau modèle : on peut tester intéractions entre age et chest 
+
+ou effet aléatoire en plus 
+ ou différents types de splines 
+ 
+ ou structure de covariance aléatoire
+```{r}
+fit_gamm2 <- gamm(
+    Weight ~ s(Age) + s(Chest) + s(Length) + Age:Chest,  # Ajouter une interaction entre Age et Chest
+    random = list(NumberID = ~1), 
+    data = trainset
+)
+fit_gamm3 <- gamm(
+    Weight ~ te(Age, Chest) + s(Length),  # Interaction non-linéaire entre Age et Chest
+    random = list(NumberID = ~1), 
+    data = trainset
+)
+
+
+fit_gamm4 <- gamm(
+    Weight ~ s(Age) + s(Chest) + s(Length),
+    random = list(NumberID = ~ Age),  # Effet aléatoire sur la pente de Age
+    data = trainset
+)
+
+fit_gamm5 <- gamm(
+    Weight ~ s(Age) + s(Chest) + s(Length),
+    random = list(NumberID = ~1),
+    correlation = corAR1(form = ~ 1 | NumberID),  # Structure autoregressive pour les effets aléatoires
+    data = trainset
+)
+
+
+```
+
+
+Comparaison des modèles : 
+
+```{r}
+# Extraire la log-vraisemblance de chaque modèle (si possible)
+logLik1 <- logLik(fit_gamm$lme)
+logLik2 <- logLik(fit_gamm2$lme)
+logLik3 <- logLik(fit_gamm3$lme)
+logLik4 <- logLik(fit_gamm4$lme)
+logLik5 <- logLik(fit_gamm5$lme)
+
+
+
+# Comparer les log-vraisemblances
+comparison_logLik <- data.frame(
+    Model = c("fit_gamm$lme", "fit_gamm2$lme", "fit_gamm3$lme","fit_gamm4$lme","fit_gamm5$lme"),
+    LogLikelihood = c(logLik1, logLik2, logLik3, logLik4, logLik5)
+)
+print(comparison_logLik)
+```
+Il semble que fit_gamm , fit_gamm2 et fit_gamm3 soient meilleur selon se critère. 
+ 
+ 
+ 
+```{r}
+# Extraire les résidus pour chaque modèle
+residuals_gamm1 <- residuals(fit_gamm$gam) + residuals(fit_gamm$lme)
+
+
+residuals_gamm2 <- residuals(fit_gamm2$gam) + residuals(fit_gamm2$lme)
+
+
+residuals_gamm3 <- residuals(fit_gamm3$gam) + residuals(fit_gamm3$lme)
+
+residuals_gamm4 <- residuals(fit_gamm4$gam) + residuals(fit_gamm4$lme)
+
+
+residuals_gamm5 <- residuals(fit_gamm5$gam) + residuals(fit_gamm5$lme)
+
+
+
+# QQ-plots des résidus pour chaque modèle
+
+# fit_gamm
+qqnorm(residuals_gamm1, main = "QQ-plot des résidus combinés (fit_gamm1)")
+qqline(residuals_gamm1, col = "red")
+
+
+
+# fit_gamm2
+qqnorm(residuals_gamm2, main = "QQ-plot des résidus combinés (fit_gamm2)")
+qqline(residuals_gamm2, col = "red")
+
+
+# fit_gamm3
+qqnorm(residuals_gamm3, main = "QQ-plot des résidus combinés (fit_gamm3)")
+qqline(residuals_gamm3, col = "red")
+
+
+
+# fit_gamm4
+qqnorm(residuals_gamm4, main = "QQ-plot des résidus combinés (fit_gamm4)")
+qqline(residuals_gamm4, col = "red")
+
+
+
+# fit_gamm5
+qqnorm(residuals_gamm5, main = "QQ-plot des résidus combinés (fit_gamm5)")
+qqline(residuals_gamm5, col = "red")
+
+
+
+``` 
+Tout les résidus semblent suivre une loi normal ce qui est bien
+semble mieux pour 1 4 5
+Test d'homoscedacité : 
+
+```{r}
+
+
+# Extraire les résidus de chaque modèle
+residuals_gamm <- residuals(fit_gamm$gam) + residuals(fit_gamm$lme)
+residuals_gam <- residuals(fit_gamm$gam)
+residuals_lme <- residuals(fit_gamm$lme)
+
+# Tracer les résidus pour les trois modèles
+
+# Résidus du modèle additif mixte
+plot(residuals_gamm, main = "Résidus: Modèle Additif Mixte (fit_gamm)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+
+# Extraire les résidus de chaque modèle
+residuals_gamm2 <- residuals(fit_gamm2$gam) + residuals(fit_gamm2$lme)
+
+
+
+# Résidus du modèle additif mixte
+plot(residuals_gamm2, main = "Résidus: Modèle Additif Mixte (fit_gamm2)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+
+# Extraire les résidus de chaque modèle
+residuals_gamm3 <- residuals(fit_gamm3$gam) + residuals(fit_gamm3$lme)
+
+
+# Tracer les résidus pour les trois modèles
+
+# Résidus du modèle additif mixte
+plot(residuals_gamm3, main = "Résidus: Modèle Additif Mixte (fit_gamm3)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+# Extraire les résidus de chaque modèle
+residuals_gamm4 <- residuals(fit_gamm4$gam) + residuals(fit_gamm4$lme)
+
+
+# Tracer les résidus pour les trois modèles
+
+# Résidus du modèle additif mixte
+plot(residuals_gamm4, main = "Résidus: Modèle Additif Mixte (fit_gamm4)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+# Extraire les résidus de chaque modèle
+residuals_gamm5 <- residuals(fit_gamm5$gam) + residuals(fit_gamm5$lme)
+
+
+# Tracer les résidus pour les trois modèles
+
+# Résidus du modèle additif mixte
+plot(residuals_gamm5, main = "Résidus: Modèle Additif Mixte (fit_gamm5)", ylab = "Résidus", xlab = "Index")
+abline(h = 0, col = "red", lty = 2)
+
+
+
+
+
+```
+Dans tous les modèles les résidus semblent centrée en 0 ce qui ai bien, mieux pour 2 et 3. 
+
+```{r}
+
+# Charger le testset
+testset = read.table('test_MIC.csv', sep=',', header=TRUE)
+testset <- testset[, -2]  # Supprimer la colonne de date si elle existe
+
+# Faire les prédictions sur l'ensemble de test avec les 5 modèles ajustés
+pred_gamm <- predict(fit_gamm$gam)
+pred_gamm2 <- predict(fit_gamm2$gam)
+pred_gamm3 <- predict(fit_gamm3$gam)
+pred_gamm4 <- predict(fit_gamm4$gam)
+pred_gamm5 <- predict(fit_gamm5$gam)
+
+# Calculer l'erreur quadratique moyenne (RMSE) pour chaque modèle
+rmse_gamm <- sqrt(mean((testset$Weight - pred_gamm)^2))
+rmse_gamm2 <- sqrt(mean((testset$Weight - pred_gamm2)^2))
+rmse_gamm3 <- sqrt(mean((testset$Weight - pred_gamm3)^2))
+rmse_gamm4 <- sqrt(mean((testset$Weight - pred_gamm4)^2))
+rmse_gamm5 <- sqrt(mean((testset$Weight - pred_gamm5)^2))
+
+# Comparer les RMSE des 5 modèles
+rmse_comparison <- data.frame(
+    Model = c("fit_gamm", "fit_gamm2", "fit_gamm3", "fit_gamm4", "fit_gamm5"),
+    RMSE = c(rmse_gamm, rmse_gamm2, rmse_gamm3, rmse_gamm4, rmse_gamm5)
+)
+
+# Afficher la comparaison des RMSE
+print(rmse_comparison)
+
+
+```
+On a des RMSE équivalent mais 1 5 et 2 semble mieux. 
+
+
+
+
+Au vu des résultats on peut garder fit_gamm1, fit_gamm2 et fit_gamm5.
+
+```{r}
+trainset = read.table('train1.csv', sep=',', header=TRUE)
+testset = read.table('test1.csv', sep=',', header=TRUE)
+
+
+# Convertir les dates en format Date si ce n'est pas déjà fait
+trainset$Day <- as.Date(trainset$Day)
+
+# Déterminer la date de libération (dernière date disponible)
+release_date <- max(trainset$Day)
+
+# Ajouter une colonne indiquant le nombre de semaines avant la libération
+trainset$WeeksBeforeRelease <- as.numeric(difftime(release_date, trainset$Day, units = "weeks"))
+
+# Convertir les dates en format Date si ce n'est pas déjà fait
+testset$Day <- as.Date(testset$Day)
+
+# Déterminer la date de libération (dernière date disponible)
+release_date <- max(testset$Day)
+
+# Ajouter une colonne indiquant le nombre de semaines avant la libération
+testset$WeeksBeforeRelease <- as.numeric(difftime(release_date, testset$Day, units = "weeks"))
+
+```
+
+
+
+
+
+
+```{r}
+# Charger les bibliothèques nécessaires
+library(mgcv)  # Pour les modèles GAM
+library(ggplot2)  # Pour les visualisations
+
+
+
+# Assurez-vous que 'testset' contient les bonnes colonnes nécessaires pour les prédictions
+# Par exemple, les colonnes comme Age, Chest, Length doivent être présentes dans testset.
+
+# Prédictions avec les modèles fit_gamm, fit_gamm2, fit_gamm5 (vos modèles déjà ajustés)
+testset$PredictedWeight_GAMM <- predict(fit_gamm$gam, newdata = testset)
+testset$PredictedWeight_GAMM2 <- predict(fit_gamm2$gam, newdata = testset)
+testset$PredictedWeight_GAMM5 <- predict(fit_gamm5$gam, newdata = testset)
+
+# Si vous voulez évaluer les performances des modèles (par exemple, calculer les RMSE), vous devez avoir les valeurs réelles de "Weight" dans 'testset'
+
+# Calcul des RMSE pour chaque modèle
+rmse_gamm <- sqrt(mean((testset$Weight - testset$PredictedWeight_GAMM)^2, na.rm = TRUE))
+rmse_gamm2 <- sqrt(mean((testset$Weight - testset$PredictedWeight_GAMM2)^2, na.rm = TRUE))
+rmse_gamm5 <- sqrt(mean((testset$Weight - testset$PredictedWeight_GAMM5)^2, na.rm = TRUE))
+
+# Résultats des RMSE
+rmse_results <- data.frame(
+    Model = c("fit_gamm", "fit_gamm2", "fit_gamm5"),
+    RMSE = c(rmse_gamm, rmse_gamm2, rmse_gamm5)
+)
+
+print(rmse_results)
+
+# Visualisation des prédictions
+prediction_data_long <- reshape(testset, 
+                                varying = c("PredictedWeight_GAMM", "PredictedWeight_GAMM2", "PredictedWeight_GAMM5"),
+                                v.names = "PredictedWeight",
+                                timevar = "Model",
+                                times = c("fit_gamm", "fit_gamm2", "fit_gamm5"),
+                                direction = "long")
+
+# Tracer les prédictions des différents modèles
+ggplot(prediction_data_long, aes(x = Age, y = PredictedWeight, color = Model)) +
+    geom_line(size = 1) +
+    labs(title = "Prédictions de poids pour différents modèles",
+         x = "Age",
+         y = "Poids prédit") +
+    theme_minimal()
+
+
+
+```
+
+
+```{r}
+# Charger les bibliothèques nécessaires
+library(mgcv)  # Pour les modèles GAM
+library(ggplot2)  # Pour les visualisations
+
+
+
+# Assurez-vous que 'testset' contient les bonnes colonnes nécessaires pour les prédictions
+# Par exemple, les colonnes comme Age, Chest, Length doivent être présentes dans testset.
+
+# Prédictions avec les modèles fit_gamm, fit_gamm2, fit_gamm5 (vos modèles déjà ajustés)
+testset$PredictedWeight_GAMM <- predict(fit_gamm$gam, newdata = testset)
+testset$PredictedWeight_GAMM2 <- predict(fit_gamm2$gam, newdata = testset)
+testset$PredictedWeight_GAMM5 <- predict(fit_gamm5$gam, newdata = testset)
+
+# Si vous voulez évaluer les performances des modèles (par exemple, calculer les RMSE), vous devez avoir les valeurs réelles de "Weight" dans 'testset'
+
+# Calcul des RMSE pour chaque modèle
+rmse_gamm <- sqrt(mean((testset$Weight - testset$PredictedWeight_GAMM)^2, na.rm = TRUE))
+rmse_gamm2 <- sqrt(mean((testset$Weight - testset$PredictedWeight_GAMM2)^2, na.rm = TRUE))
+rmse_gamm5 <- sqrt(mean((testset$Weight - testset$PredictedWeight_GAMM5)^2, na.rm = TRUE))
+
+# Résultats des RMSE
+rmse_results <- data.frame(
+    Model = c("fit_gamm", "fit_gamm2", "fit_gamm5"),
+    RMSE = c(rmse_gamm, rmse_gamm2, rmse_gamm5)
+)
+
+print(rmse_results)
+
+# Visualisation des prédictions
+prediction_data_long <- reshape(testset, 
+                                varying = c("PredictedWeight_GAMM", "PredictedWeight_GAMM2", "PredictedWeight_GAMM5"),
+                                v.names = "PredictedWeight",
+                                timevar = "Model",
+                                times = c("fit_gamm", "fit_gamm2", "fit_gamm5"),
+                                direction = "long")
+
+# Tracer les prédictions des différents modèles
+ggplot(prediction_data_long, aes(x = Age, y = PredictedWeight, color = Model)) +
+    geom_line(size = 1) +
+    labs(title = "Prédictions de poids pour différents modèles",
+         x = "Age",
+         y = "Poids prédit") +
+    theme_minimal()
+
+
+
+```
+
+
+```{r}
+library(mgcv)  # Pour les modèles GAM
+library(ggplot2)  # Pour les visualisations
+
+# Charger le jeu de données de test
+testset <- read.table('test_MIC.csv', sep = ',', header = TRUE)
+
+# Prédictions pour chaque modèle (GAMM, GAMM2, GAMM5) à différents âges
+testset$PredictedWeight_GAMM <- predict(fit_gamm$gam, newdata = testset)
+testset$PredictedWeight_GAMM2 <- predict(fit_gamm2$gam, newdata = testset)
+testset$PredictedWeight_GAMM5 <- predict(fit_gamm5$gam, newdata = testset)
+
+# Initialiser un tableau pour stocker les résultats du RMSE
+rmse_results <- data.frame(
+    Age = integer(),
+    Model = character(),
+    RMSE = numeric()
+)
+
+# Boucle pour chaque âge unique (à partir de 1 semaine, 2 semaines, etc.)
+for (age in unique(testset$Age)) {
+    # Filtrer les données réelles et prédictions pour cet âge
+    real_data <- subset(testset, Age == age)
+    
+    if (nrow(real_data) > 0) {
+        # Calcul des RMSE pour chaque modèle par rapport au poids réel pour cet âge
+        rmse_gamm <- sqrt(mean((real_data$Weight - real_data$PredictedWeight_GAMM)^2, na.rm = TRUE))
+        rmse_gamm2 <- sqrt(mean((real_data$Weight - real_data$PredictedWeight_GAMM2)^2, na.rm = TRUE))
+        rmse_gamm5 <- sqrt(mean((real_data$Weight - real_data$PredictedWeight_GAMM5)^2, na.rm = TRUE))
+        
+        # Ajouter les résultats au tableau
+        rmse_results <- rbind(
+            rmse_results,
+            data.frame(Age = age, Model = "fit_gamm", RMSE = rmse_gamm),
+            data.frame(Age = age, Model = "fit_gamm2", RMSE = rmse_gamm2),
+            data.frame(Age = age, Model = "fit_gamm5", RMSE = rmse_gamm5)
+        )
+    }
+}
+
+# Afficher les résultats du RMSE pour chaque âge et chaque modèle
+print(rmse_results)
+
+# Visualisation des RMSE pour chaque modèle en fonction de l'âge avec ggplot2
+ggplot(rmse_results, aes(x = Age, y = RMSE, color = Model)) +
+    geom_line(size = 1) +
+    labs(title = "Comparaison des RMSE pour chaque modèle en fonction de l'âge",
+         x = "Âge du cochon (semaines)",
+         y = "Erreur quadratique moyenne (RMSE)") +
+    theme_minimal() +
+    theme(legend.position = "top")
+
+
+
+
+```
+
+on doit pouvoir faire des prédictions jusque 15 ou 20 semaines. 
