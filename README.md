@@ -25,11 +25,4 @@ This project focuses on predicting pig weight using longitudinal agricultural da
 - GAMM provided the best balance between fit and interpretability  
 - Residual diagnostics confirm model stability
 
-## 📁 Structure
-
-- `data/` : cleaned dataset  
-- `scripts/` : R scripts for model fitting and evaluation  
-- `figures/` : plots and diagnostics  
-- `report/` : summary PDF or notebook (optional)
-
 👤 – ENSIIE, 2025
